@@ -7,6 +7,9 @@ require __DIR__ . '/../vendor/autoload.php';
 
 use App\Presentation\Cli\Command\DbMigrateCommand;
 use App\Presentation\Cli\Command\MakePageCommand;
+use App\Presentation\Cli\Command\PageCreateCommand;
+use App\Presentation\Cli\Command\PageDeleteCommand;
+use App\Presentation\Cli\Command\PageShowCommand;
 use Symfony\Component\Console\Application;
 
 $envFile = __DIR__ . '/../.env';
@@ -23,4 +26,7 @@ if (is_file($envFile)) {
 $application = new Application('Sovereign Engine', '0.1.0');
 $application->add(new MakePageCommand());
 $application->add(new DbMigrateCommand());
+$application->add(new PageCreateCommand());
+$application->add(new PageShowCommand());
+$application->add(new PageDeleteCommand());
 $application->run();
