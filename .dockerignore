@@ -1,0 +1,6 @@
+.git
+vendor
+var
+.phpconf
+composer.phar
+*.md

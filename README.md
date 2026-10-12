@@ -42,15 +42,28 @@ for when Redis/the worker is unavailable.
 ## Setup
 
 ```bash
+./scripts/setup.sh
+```
+
+That's it — it starts Docker, installs PHP dependencies, installs WordPress
+headlessly, and runs migrations. It's safe to re-run any time (e.g. after
+pulling new commits): already-done steps are skipped instead of failing.
+The site is then at http://localhost:8080 (wp-admin: `admin` / `admin`).
+
+<details>
+<summary>What the script does, if you'd rather run it by hand or something goes wrong</summary>
+
+```bash
 cp .env.example .env
 
 # Local infrastructure: MySQL, Redis, WordPress (PHP-FPM), Nginx in front of
 # it (the wordpress:*-fpm image only speaks FastCGI, it has no web server of
-# its own), and a PHP CLI container (app) for running bin/console & friends.
-docker compose up -d
+# its own), and a PHP CLI container (app, with Composer baked in) for
+# running bin/console, composer, and the verification tools.
+docker compose up -d --build
 
-# Install PHP dependencies (via the bundled Composer container)
-docker compose --profile tools run --rm composer install
+# Install PHP dependencies
+docker compose exec app composer install
 
 # Install WordPress headlessly so wp_posts exists before migrating
 docker compose --profile tools run --rm wpcli core install \
@@ -61,12 +74,20 @@ docker compose --profile tools run --rm wpcli core install \
 docker compose exec app php bin/console db:migrate
 ```
 
-The site is then reachable at http://localhost:8080 (wp-admin included).
+</details>
+
+**Troubleshooting:**
+- `docker compose up` fails to connect / hangs: Docker Desktop isn't running — start it first.
+- Port already in use (8080, 3306, or 6379): something else on your machine
+  is using it; stop that, or change the left-hand side of the `ports:`
+  mapping for the relevant service in `docker-compose.yml`.
+- Script requires `bash` (Git Bash / WSL on Windows, native on macOS/Linux).
+  On Windows without bash, run the commands from the `<details>` block above
+  manually in PowerShell instead.
 
 If you prefer running PHP natively instead of in Docker, install Composer
 locally and point the `DB_*` vars in `.env` at your own MySQL instance; the
-`app`/`composer`/`wpcli`/`nginx` Compose services are conveniences, not
-requirements.
+`app`/`wpcli`/`nginx` Compose services are conveniences, not requirements.
 
 ### Why `mysql`'s `command` overrides `sql_mode`
 
@@ -92,13 +113,11 @@ which PHP happens to execute `composer` itself.
 ## Verification
 
 ```bash
-docker compose exec app php vendor/bin/phpstan analyse   # level 9, must be 0 errors
-docker compose exec app php vendor/bin/psalm             # level 1, must be 0 errors
-docker compose exec app php vendor/bin/pest               # includes the architecture guardrail
+docker compose exec app composer check   # phpstan (L9) + psalm (L1) + pest, all must be 0 errors
 ```
 
-(Or run the same `vendor/bin/...` commands directly on the host if you set
-up PHP/Composer natively instead of via Docker.)
+Or individually: `composer stan`, `composer psalm`, `composer test` (same
+container, or directly on the host if you set up PHP/Composer natively).
 
 `tests/Infrastructure/WpPageRepositoryTest.php` needs a reachable, migrated
 MySQL — it skips itself with a clear message instead of failing when that's
