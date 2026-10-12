@@ -6,11 +6,14 @@ declare(strict_types=1);
 require __DIR__ . '/../vendor/autoload.php';
 
 use App\Presentation\Cli\Bootstrap;
+use App\Presentation\Cli\Command\AuditVerifyCommand;
 use App\Presentation\Cli\Command\DbMigrateCommand;
+use App\Presentation\Cli\Command\MakeBlockCommand;
 use App\Presentation\Cli\Command\MakePageCommand;
 use App\Presentation\Cli\Command\PageCreateCommand;
 use App\Presentation\Cli\Command\PageDeleteCommand;
 use App\Presentation\Cli\Command\PageShowCommand;
+use App\Presentation\Cli\Command\WorkerRunCommand;
 use Symfony\Component\Console\Application;
 
 $envFile = __DIR__ . '/../.env';
@@ -26,7 +29,10 @@ if (is_file($envFile)) {
 
 $application = new Application('Sovereign Engine', '0.1.0');
 $application->add(new MakePageCommand());
+$application->add(new MakeBlockCommand());
 $application->add(new DbMigrateCommand());
+$application->add(new AuditVerifyCommand(Bootstrap::auditLogger()));
+$application->add(new WorkerRunCommand(Bootstrap::redisFactory()));
 $application->add(new PageCreateCommand(Bootstrap::pageRepository(), Bootstrap::eventDispatcher()));
 $application->add(new PageShowCommand(Bootstrap::pageRepository()));
 $application->add(new PageDeleteCommand(Bootstrap::pageRepository(), Bootstrap::eventDispatcher()));
