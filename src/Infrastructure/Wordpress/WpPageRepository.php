@@ -76,7 +76,7 @@ final readonly class WpPageRepository implements PageRepositoryInterface
     }
 
     #[Override]
-    public function softDelete(PostId $id, PostId $deletedBy): void
+    public function softDelete(PostId $id, PostId $deletedBy): bool
     {
         $statement = $this->connection->prepare(
             'UPDATE wp_posts
@@ -88,6 +88,8 @@ final readonly class WpPageRepository implements PageRepositoryInterface
             'deletedBy' => $deletedBy->value,
             'id' => $id->value,
         ]);
+
+        return $statement->rowCount() > 0;
     }
 
     private static function slugify(string $title): string

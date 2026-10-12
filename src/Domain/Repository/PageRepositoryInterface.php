@@ -15,5 +15,9 @@ interface PageRepositoryInterface
 
     public function find(PostId $id): ?Page;
 
-    public function softDelete(PostId $id, PostId $deletedBy): void;
+    /**
+     * @return bool true if a row was actually soft-deleted, false if the
+     *              page didn't exist or was already deleted.
+     */
+    public function softDelete(PostId $id, PostId $deletedBy): bool;
 }

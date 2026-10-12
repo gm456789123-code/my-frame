@@ -6,9 +6,8 @@ namespace App\Presentation\Cli\Command;
 
 use App\Application\UseCase\Page\GetPage;
 use App\Application\UseCase\Page\GetPageInput;
-use App\Domain\ValueObject\PostId;
-use App\Infrastructure\Wordpress\WpdbConnection;
-use App\Infrastructure\Wordpress\WpPageRepository;
+use App\Presentation\Cli\Bootstrap;
+use App\Presentation\Cli\Support\PostIdArgument;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -30,11 +29,11 @@ final class PageShowCommand extends Command
     {
         /** @var string $idArgument */
         $idArgument = $input->getArgument('id');
+        $id = PostIdArgument::parse($idArgument, 'id');
 
-        $repository = new WpPageRepository(WpdbConnection::get());
-        $useCase = new GetPage($repository);
+        $useCase = new GetPage(Bootstrap::pageRepository());
 
-        $result = $useCase->handle(new GetPageInput(new PostId((int) $idArgument)));
+        $result = $useCase->handle(new GetPageInput($id));
 
         if ($result->page === null) {
             $output->writeln('<comment>Not found.</comment>');

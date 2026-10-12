@@ -7,9 +7,7 @@ namespace App\Presentation\Cli\Command;
 use App\Application\UseCase\Page\CreatePage;
 use App\Application\UseCase\Page\CreatePageInput;
 use App\Domain\ValueObject\Locale;
-use App\Infrastructure\Events\SynchronousEventDispatcher;
-use App\Infrastructure\Wordpress\WpdbConnection;
-use App\Infrastructure\Wordpress\WpPageRepository;
+use App\Presentation\Cli\Bootstrap;
 use InvalidArgumentException;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -48,8 +46,7 @@ final class PageCreateCommand extends Command
             throw new InvalidArgumentException("Invalid locale '{$localeValue}', expected 'th' or 'en'.");
         }
 
-        $repository = new WpPageRepository(WpdbConnection::get());
-        $useCase = new CreatePage($repository, new SynchronousEventDispatcher());
+        $useCase = new CreatePage(Bootstrap::pageRepository(), Bootstrap::eventDispatcher());
 
         $result = $useCase->handle(new CreatePageInput($title, $content, $locale));
 

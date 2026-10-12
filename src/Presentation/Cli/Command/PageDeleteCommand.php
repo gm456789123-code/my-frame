@@ -6,10 +6,8 @@ namespace App\Presentation\Cli\Command;
 
 use App\Application\UseCase\Page\DeletePage;
 use App\Application\UseCase\Page\DeletePageInput;
-use App\Domain\ValueObject\PostId;
-use App\Infrastructure\Events\SynchronousEventDispatcher;
-use App\Infrastructure\Wordpress\WpdbConnection;
-use App\Infrastructure\Wordpress\WpPageRepository;
+use App\Presentation\Cli\Bootstrap;
+use App\Presentation\Cli\Support\PostIdArgument;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -37,13 +35,18 @@ final class PageDeleteCommand extends Command
         /** @var string $deletedByArgument */
         $deletedByArgument = $input->getOption('deleted-by');
 
-        $repository = new WpPageRepository(WpdbConnection::get());
-        $useCase = new DeletePage($repository, new SynchronousEventDispatcher());
+        $id = PostIdArgument::parse($idArgument, 'id');
+        $deletedBy = PostIdArgument::parse($deletedByArgument, 'deleted-by');
 
-        $useCase->handle(new DeletePageInput(
-            new PostId((int) $idArgument),
-            new PostId((int) $deletedByArgument),
-        ));
+        $useCase = new DeletePage(Bootstrap::pageRepository(), Bootstrap::eventDispatcher());
+
+        $result = $useCase->handle(new DeletePageInput($id, $deletedBy));
+
+        if (!$result->wasDeleted) {
+            $output->writeln("<comment>Page #{$idArgument} not found (or already deleted).</comment>");
+
+            return Command::FAILURE;
+        }
 
         $output->writeln("<info>Deleted page #{$idArgument}</info>");
 

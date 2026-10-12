@@ -17,10 +17,14 @@ final readonly class DeletePage
     ) {
     }
 
-    public function handle(DeletePageInput $input): void
+    public function handle(DeletePageInput $input): DeletePageOutput
     {
-        $this->pages->softDelete($input->pageId, $input->deletedBy);
+        $wasDeleted = $this->pages->softDelete($input->pageId, $input->deletedBy);
 
-        $this->events->dispatch(new PageDeleted($input->pageId, $input->deletedBy, new DateTimeImmutable()));
+        if ($wasDeleted) {
+            $this->events->dispatch(new PageDeleted($input->pageId, $input->deletedBy, new DateTimeImmutable()));
+        }
+
+        return new DeletePageOutput($wasDeleted);
     }
 }

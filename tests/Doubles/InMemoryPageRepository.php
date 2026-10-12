@@ -34,8 +34,14 @@ final class InMemoryPageRepository implements PageRepositoryInterface
     }
 
     #[Override]
-    public function softDelete(PostId $id, PostId $deletedBy): void
+    public function softDelete(PostId $id, PostId $deletedBy): bool
     {
+        if (!isset($this->pages[$id->value])) {
+            return false;
+        }
+
         unset($this->pages[$id->value]);
+
+        return true;
     }
 }

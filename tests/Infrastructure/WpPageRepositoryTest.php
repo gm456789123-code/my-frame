@@ -70,9 +70,10 @@ it('soft-deletes a page instead of removing the row', function (): void {
     $id = $this->repository->create('Hello', '<p>World</p>', PageStatus::Draft, Locale::English);
     $this->createdIds = [$id->value];
 
-    $this->repository->softDelete($id, new PostId(1));
+    $wasDeleted = $this->repository->softDelete($id, new PostId(1));
 
-    expect($this->repository->find($id))->toBeNull();
+    expect($wasDeleted)->toBeTrue()
+        ->and($this->repository->find($id))->toBeNull();
 
     $statement = $this->pdo->prepare('SELECT deleted_at, deleted_by FROM wp_posts WHERE ID = :id');
     $statement->execute(['id' => $id->value]);
@@ -80,6 +81,20 @@ it('soft-deletes a page instead of removing the row', function (): void {
 
     expect($data['deleted_at'])->not->toBeNull()
         ->and((int) $data['deleted_by'])->toBe(1);
+});
+
+it('returns false when soft-deleting a page that does not exist', function (): void {
+    expect($this->repository->softDelete(new PostId(999999999), new PostId(1)))->toBeFalse();
+});
+
+it('returns false when soft-deleting an already-deleted page', function (): void {
+    $id = $this->repository->create('Hello', '<p>World</p>', PageStatus::Draft, Locale::English);
+    $this->createdIds = [$id->value];
+
+    $this->repository->softDelete($id, new PostId(1));
+    $secondAttempt = $this->repository->softDelete($id, new PostId(1));
+
+    expect($secondAttempt)->toBeFalse();
 });
 
 it('returns null for a page that does not exist', function (): void {
