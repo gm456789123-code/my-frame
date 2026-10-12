@@ -6,8 +6,9 @@ namespace App\Presentation\Cli\Command;
 
 use App\Application\UseCase\Page\CreatePage;
 use App\Application\UseCase\Page\CreatePageInput;
+use App\Domain\Event\DomainEventDispatcherInterface;
+use App\Domain\Repository\PageRepositoryInterface;
 use App\Domain\ValueObject\Locale;
-use App\Presentation\Cli\Bootstrap;
 use InvalidArgumentException;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -21,6 +22,13 @@ use ValueError;
 #[AsCommand(name: 'page:create', description: 'Create a draft page.')]
 final class PageCreateCommand extends Command
 {
+    public function __construct(
+        private readonly PageRepositoryInterface $pages,
+        private readonly DomainEventDispatcherInterface $events,
+    ) {
+        parent::__construct();
+    }
+
     #[Override]
     protected function configure(): void
     {
@@ -46,7 +54,7 @@ final class PageCreateCommand extends Command
             throw new InvalidArgumentException("Invalid locale '{$localeValue}', expected 'th' or 'en'.");
         }
 
-        $useCase = new CreatePage(Bootstrap::pageRepository(), Bootstrap::eventDispatcher());
+        $useCase = new CreatePage($this->pages, $this->events);
 
         $result = $useCase->handle(new CreatePageInput($title, $content, $locale));
 

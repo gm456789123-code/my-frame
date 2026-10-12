@@ -6,7 +6,8 @@ namespace App\Presentation\Cli\Command;
 
 use App\Application\UseCase\Page\DeletePage;
 use App\Application\UseCase\Page\DeletePageInput;
-use App\Presentation\Cli\Bootstrap;
+use App\Domain\Event\DomainEventDispatcherInterface;
+use App\Domain\Repository\PageRepositoryInterface;
 use App\Presentation\Cli\Support\PostIdArgument;
 use Override;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -19,6 +20,13 @@ use Symfony\Component\Console\Output\OutputInterface;
 #[AsCommand(name: 'page:delete', description: 'Soft-delete a page by id.')]
 final class PageDeleteCommand extends Command
 {
+    public function __construct(
+        private readonly PageRepositoryInterface $pages,
+        private readonly DomainEventDispatcherInterface $events,
+    ) {
+        parent::__construct();
+    }
+
     #[Override]
     protected function configure(): void
     {
@@ -38,7 +46,7 @@ final class PageDeleteCommand extends Command
         $id = PostIdArgument::parse($idArgument, 'id');
         $deletedBy = PostIdArgument::parse($deletedByArgument, 'deleted-by');
 
-        $useCase = new DeletePage(Bootstrap::pageRepository(), Bootstrap::eventDispatcher());
+        $useCase = new DeletePage($this->pages, $this->events);
 
         $result = $useCase->handle(new DeletePageInput($id, $deletedBy));
 

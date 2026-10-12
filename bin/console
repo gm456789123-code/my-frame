@@ -5,6 +5,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use App\Presentation\Cli\Bootstrap;
 use App\Presentation\Cli\Command\DbMigrateCommand;
 use App\Presentation\Cli\Command\MakePageCommand;
 use App\Presentation\Cli\Command\PageCreateCommand;
@@ -26,7 +27,7 @@ if (is_file($envFile)) {
 $application = new Application('Sovereign Engine', '0.1.0');
 $application->add(new MakePageCommand());
 $application->add(new DbMigrateCommand());
-$application->add(new PageCreateCommand());
-$application->add(new PageShowCommand());
-$application->add(new PageDeleteCommand());
+$application->add(new PageCreateCommand(Bootstrap::pageRepository(), Bootstrap::eventDispatcher()));
+$application->add(new PageShowCommand(Bootstrap::pageRepository()));
+$application->add(new PageDeleteCommand(Bootstrap::pageRepository(), Bootstrap::eventDispatcher()));
 $application->run();
