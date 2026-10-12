@@ -1,0 +1,88 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wordpress
+      MYSQL_PASSWORD: wordpress
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  wordpress:
+    image: wordpress:php8.3-fpm
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: mysql
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wp_data:/var/www/html
+      - ./:/var/www/app
+    ports:
+      - "8080:80"
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    working_dir: /var/www/app
+    volumes:
+      - ./:/var/www/app
+    environment:
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_DATABASE: wordpress
+      DB_USERNAME: wordpress
+      DB_PASSWORD: wordpress
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["sleep", "infinity"]
+
+  wpcli:
+    image: wordpress:cli-php8.3
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      WORDPRESS_DB_HOST: mysql
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+    volumes:
+      - wp_data:/var/www/html
+    entrypoint: ["wp"]
+    profiles: ["tools"]
+
+  composer:
+    image: composer:2
+    working_dir: /app
+    volumes:
+      - ./:/app
+    entrypoint: ["composer"]
+    profiles: ["tools"]
+
+volumes:
+  mysql_data:
+  wp_data:

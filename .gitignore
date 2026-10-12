@@ -1,0 +1,8 @@
+/vendor/
+/var/
+.env
+composer.phar
+.phpconf/
+
+# WordPress runtime data mounted via docker-compose volumes, not part of the repo
+/wp-content/uploads/
