@@ -8,7 +8,12 @@ declare(strict_types=1);
 // unchanged, and routes everything else here, so a normal page view never
 // pays for a full WP boot + WP_Query just to be overridden afterwards.
 
-require_once '/var/www/app/vendor/autoload.php';
+// Self-locating: this file always lives at <project-root>/public/front.php,
+// so the project root is always one level up, regardless of where the
+// project was cloned/deployed -- no path needs editing here.
+$projectRoot = dirname(__DIR__);
+
+require_once $projectRoot . '/vendor/autoload.php';
 
 use App\Application\UseCase\Page\GetLatestPublishedPageId;
 use App\Application\UseCase\Page\GetPage;
@@ -48,12 +53,12 @@ try {
     $controller = new PageController(
         getPage: new GetPage($repository),
         parser: new BlockAstParser(Env::string('APP_URL', '')),
-        renderer: new BlockRenderer($latte, '/var/www/app/templates/blocks'),
+        renderer: new BlockRenderer($latte, $projectRoot . '/templates/blocks'),
         cache: $cache,
         pdo: $pdo,
         isLocal: Env::string('APP_ENV', 'local') === 'local',
         latte: $latte,
-        layoutPath: '/var/www/app/templates/layout.latte',
+        layoutPath: $projectRoot . '/templates/layout.latte',
         siteUrl: $siteUrl,
         adminUrl: $siteUrl . '/wp-admin/',
         logoUrl: $logoUrl,
@@ -70,7 +75,7 @@ try {
     if ($pageId === null) {
         http_response_code(404);
         header('Content-Type: text/html; charset=UTF-8');
-        echo $latte->renderToString('/var/www/app/templates/layout.latte', [
+        echo $latte->renderToString($projectRoot . '/templates/layout.latte', [
             'locale' => 'en',
             'title' => 'Nothing published yet',
             'content' => '<p>Head to <a href="' . htmlspecialchars($siteUrl . '/wp-admin/') . '">wp-admin</a> to publish your first post.</p>',
@@ -96,7 +101,7 @@ try {
     // except "go run the installer".
     http_response_code(503);
     header('Content-Type: text/html; charset=UTF-8');
-    echo $latte->renderToString('/var/www/app/templates/starter.latte', [
+    echo $latte->renderToString($projectRoot . '/templates/starter.latte', [
         'siteName' => 'Sovereign Engine',
         'logoUrl' => $logoUrl,
         'phpVersion' => PHP_VERSION,

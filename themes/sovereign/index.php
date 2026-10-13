@@ -19,13 +19,19 @@ if (!function_exists('sov_esc_url')) {
 // not the site owner, win control of the admin account. See
 // src/Presentation/Cli/Command/WpInstallCommand.php.
 
+// Self-locating: this only resolves to the actual project root if
+// wp-content/themes/sovereign is a symlink (or bind mount) to this
+// project's themes/sovereign directory, not a copy of it -- __DIR__
+// follows the link back to where this file really lives.
+$projectRoot = dirname(__DIR__, 2);
+
 $startTime = microtime(true);
 $isWpRunning = function_exists('is_blog_installed');
 $isWpInstalled = $isWpRunning && is_blog_installed();
 
 // 1. If WordPress is running and viewing a specific Page or Post, render via Sovereign Engine Latte renderer
-if ($isWpRunning && (is_page() || is_single()) && file_exists('/var/www/app/vendor/autoload.php')) {
-    require_once '/var/www/app/vendor/autoload.php';
+if ($isWpRunning && (is_page() || is_single()) && file_exists($projectRoot . '/vendor/autoload.php')) {
+    require_once $projectRoot . '/vendor/autoload.php';
 
     $postId = (int) get_the_ID();
     if ($postId > 0) {
@@ -35,7 +41,7 @@ if ($isWpRunning && (is_page() || is_single()) && file_exists('/var/www/app/vend
         $parser = new \App\Infrastructure\Wordpress\Gutenberg\BlockAstParser();
         $latte = new \Latte\Engine();
         $latte->setTempDirectory(sys_get_temp_dir());
-        $renderer = new \App\Presentation\View\BlockRenderer($latte, '/var/www/app/templates/blocks');
+        $renderer = new \App\Presentation\View\BlockRenderer($latte, $projectRoot . '/templates/blocks');
 
         $controller = new \App\Presentation\Http\PageController($getPage, $parser, $renderer, null, $pdo, true);
         $response = $controller->show($postId);

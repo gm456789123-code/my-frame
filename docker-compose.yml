@@ -53,7 +53,6 @@ services:
       APP_ENV: local
     volumes:
       - wp_data:/var/www/html
-      - ./public/index.php:/var/www/html/index.php
       - ./themes/sovereign:/var/www/html/wp-content/themes/sovereign
       - ./assets:/var/www/html/assets:ro
       - ./:/var/www/app

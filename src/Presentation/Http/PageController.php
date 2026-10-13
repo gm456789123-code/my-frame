@@ -23,7 +23,7 @@ final readonly class PageController
         private ?PDO $pdo = null,
         private bool $isLocal = false,
         private ?Engine $latte = null,
-        private string $layoutPath = '/var/www/app/templates/layout.latte',
+        private ?string $layoutPath = null,
         private string $siteName = 'Sovereign Engine',
         private string $siteUrl = '',
         private string $adminUrl = '',
@@ -81,8 +81,13 @@ final readonly class PageController
         // 4. Render pure Latte templates
         $renderedContent = $this->renderer->renderAll($blocks);
 
-        $html = $this->latte !== null && is_file($this->layoutPath)
-            ? $this->latte->renderToString($this->layoutPath, [
+        // Self-locating fallback: this file always lives at
+        // src/Presentation/Http/PageController.php, so three levels up is
+        // always the project root, regardless of where it was deployed.
+        $layoutPath = $this->layoutPath ?? dirname(__DIR__, 3) . '/templates/layout.latte';
+
+        $html = $this->latte !== null && is_file($layoutPath)
+            ? $this->latte->renderToString($layoutPath, [
                 'locale' => $output->page->locale->value,
                 'title' => $output->page->title,
                 'content' => $renderedContent,
