@@ -10,6 +10,7 @@ use App\Domain\ValueObject\PostId;
 use App\Infrastructure\Cache\CacheInterface;
 use App\Infrastructure\Wordpress\Gutenberg\BlockAstParser;
 use App\Presentation\View\BlockRenderer;
+use Latte\Engine;
 use PDO;
 
 final readonly class PageController
@@ -21,6 +22,12 @@ final readonly class PageController
         private ?CacheInterface $cache = null,
         private ?PDO $pdo = null,
         private bool $isLocal = false,
+        private ?Engine $latte = null,
+        private string $layoutPath = '/var/www/app/templates/layout.latte',
+        private string $siteName = 'Sovereign Engine',
+        private string $siteUrl = '',
+        private string $adminUrl = '',
+        private string $logoUrl = '',
     ) {
     }
 
@@ -74,12 +81,23 @@ final readonly class PageController
         // 4. Render pure Latte templates
         $renderedContent = $this->renderer->renderAll($blocks);
 
-        $html = sprintf(
-            '<!DOCTYPE html><html lang="%s"><head><title>%s</title></head><body class="p-8 max-w-4xl mx-auto">%s</body></html>',
-            htmlspecialchars($output->page->locale->value),
-            htmlspecialchars($output->page->title),
-            $renderedContent
-        );
+        $html = $this->latte !== null && is_file($this->layoutPath)
+            ? $this->latte->renderToString($this->layoutPath, [
+                'locale' => $output->page->locale->value,
+                'title' => $output->page->title,
+                'content' => $renderedContent,
+                'siteName' => $this->siteName,
+                'siteUrl' => $this->siteUrl,
+                'adminUrl' => $this->adminUrl,
+                'logoUrl' => $this->logoUrl,
+                'phpVersion' => PHP_VERSION,
+            ])
+            : sprintf(
+                '<!DOCTYPE html><html lang="%s"><head><title>%s</title></head><body class="p-8 max-w-4xl mx-auto">%s</body></html>',
+                htmlspecialchars($output->page->locale->value),
+                htmlspecialchars($output->page->title),
+                $renderedContent
+            );
 
         // 5. Cache response if not preview
         if (!$isPreview && $this->cache !== null) {

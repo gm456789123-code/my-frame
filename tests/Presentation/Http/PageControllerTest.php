@@ -31,6 +31,31 @@ it('serves cold requests within budget and renders latte templates', function ()
         ->and($response['body'])->toContain('Sovereign DevToolbar');
 });
 
+it('renders through the branded layout when a latte engine and layout path are given', function (): void {
+    $repo = new InMemoryPageRepository();
+    $id = $repo->create('Test Page', '<!-- wp:paragraph -->Hello World<!-- /wp:paragraph -->', PageStatus::Published, Locale::English);
+
+    $getPage = new GetPage($repo);
+    $parser = new BlockAstParser();
+    $latte = new Engine();
+    $latte->setTempDirectory(sys_get_temp_dir());
+    $renderer = new BlockRenderer($latte, __DIR__ . '/../../../templates/blocks');
+
+    $controller = new PageController(
+        getPage: $getPage,
+        parser: $parser,
+        renderer: $renderer,
+        latte: $latte,
+        layoutPath: __DIR__ . '/../../../templates/layout.latte',
+        siteName: 'Test Site',
+    );
+    $response = $controller->show($id->value);
+
+    expect($response['body'])->toContain('Hello World')
+        ->and($response['body'])->toContain('Test Site')
+        ->and($response['body'])->toContain('<!DOCTYPE html>');
+});
+
 it('serves warm cached requests with 0 DB queries', function (): void {
     $repo = new InMemoryPageRepository();
     $getPage = new GetPage($repo);
