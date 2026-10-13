@@ -16,6 +16,13 @@ interface PageRepositoryInterface
     public function find(PostId $id): ?Page;
 
     /**
+     * Most recently published, non-deleted page -- used for the site
+     * homepage when no specific id is requested (mirrors WordPress's own
+     * "show_on_front=posts" behaviour without needing WordPress loaded).
+     */
+    public function findLatestPublishedId(): ?PostId;
+
+    /**
      * @return bool true if a row was actually soft-deleted, false if the
      *              page didn't exist or was already deleted.
      */

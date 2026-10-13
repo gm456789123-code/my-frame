@@ -44,4 +44,21 @@ final class InMemoryPageRepository implements PageRepositoryInterface
 
         return true;
     }
+
+    #[Override]
+    public function findLatestPublishedId(): ?PostId
+    {
+        $published = array_values(array_filter(
+            $this->pages,
+            static fn (Page $page): bool => $page->status === PageStatus::Published,
+        ));
+
+        if ($published === []) {
+            return null;
+        }
+
+        usort($published, static fn (Page $a, Page $b): int => $b->createdAt <=> $a->createdAt);
+
+        return $published[0]->id;
+    }
 }

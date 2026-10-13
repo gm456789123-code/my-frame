@@ -14,11 +14,11 @@ final class WpdbConnection
     public static function get(): PDO
     {
         if (self::$instance === null) {
-            $host = Env::string('DB_HOST', 'mysql');
+            $host = self::resolveString('DB_HOST', 'DB_HOST', Env::string('WORDPRESS_DB_HOST', 'mysql'));
             $port = Env::string('DB_PORT', '3306');
-            $database = Env::string('DB_DATABASE', 'wordpress');
-            $username = Env::string('DB_USERNAME', 'wordpress');
-            $password = Env::string('DB_PASSWORD', 'wordpress');
+            $database = self::resolveString('DB_NAME', 'DB_DATABASE', Env::string('WORDPRESS_DB_NAME', 'wordpress'));
+            $username = self::resolveString('DB_USER', 'DB_USERNAME', Env::string('WORDPRESS_DB_USER', 'wordpress'));
+            $password = self::resolveString('DB_PASSWORD', 'DB_PASSWORD', Env::string('WORDPRESS_DB_PASSWORD', 'wordpress'));
 
             self::$instance = new PDO(
                 "mysql:host={$host};port={$port};dbname={$database};charset=utf8mb4",
@@ -29,5 +29,20 @@ final class WpdbConnection
         }
 
         return self::$instance;
+    }
+
+    /**
+     * @psalm-suppress MixedAssignment
+     */
+    private static function resolveString(string $constantName, string $envKey, string $default): string
+    {
+        if (defined($constantName)) {
+            $constantValue = constant($constantName);
+            if (is_string($constantValue) && $constantValue !== '') {
+                return $constantValue;
+            }
+        }
+
+        return Env::string($envKey, $default);
     }
 }

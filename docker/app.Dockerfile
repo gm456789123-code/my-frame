@@ -1,6 +1,9 @@
 FROM php:8.3-cli
 
-RUN docker-php-ext-install pdo_mysql \
+# mysqli is required to run WordPress core code (wp-load.php etc.) directly
+# from this container, e.g. bin/console wp:install -- WordPress's own $wpdb
+# uses mysqli, not PDO.
+RUN docker-php-ext-install pdo_mysql mysqli \
     && pecl install redis \
     && docker-php-ext-enable redis
 

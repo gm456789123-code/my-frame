@@ -37,6 +37,11 @@ beforeEach(function (): void {
         $this->markTestSkipped('No reachable MySQL (run via docker-compose to exercise WpPageRepository).');
     }
 
+    $hasPostsTable = $pdo->query("SHOW TABLES LIKE 'wp_posts'")->fetch() !== false;
+    if (!$hasPostsTable) {
+        $this->markTestSkipped('wp_posts table does not exist (run bin/console db:migrate first).');
+    }
+
     $hasSoftDeleteColumns = $pdo->query("SHOW COLUMNS FROM wp_posts LIKE 'deleted_at'")->fetch() !== false;
 
     if (!$hasSoftDeleteColumns) {
@@ -99,4 +104,15 @@ it('returns false when soft-deleting an already-deleted page', function (): void
 
 it('returns null for a page that does not exist', function (): void {
     expect($this->repository->find(new PostId(999999999)))->toBeNull();
+});
+
+it('finds the most recently published page for the homepage fallback', function (): void {
+    $draft = $this->repository->create('Draft', '<p>not published</p>', PageStatus::Draft, Locale::English);
+    $published = $this->repository->create('Published', '<p>latest</p>', PageStatus::Published, Locale::English);
+    $this->createdIds = [$draft->value, $published->value];
+
+    $latest = $this->repository->findLatestPublishedId();
+
+    expect($latest)->not->toBeNull()
+        ->and($latest->equals($published))->toBeTrue();
 });

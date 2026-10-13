@@ -21,10 +21,49 @@ Legend: ✅ built & verified · 🟡 built, not fully verified · ⚪ not starte
 | 8 | Native Multilingual Support | 🟡 built by Gemini, **not reviewed** | `src/Domain/Model/TranslatableTrait.php`, `src/Application/Context/RequestLocaleContext.php` |
 | 9 | Search Engine Strategy | 🟡 built by Gemini, **not reviewed** | `src/Infrastructure/Search/MySqlFullTextSearch.php`, `src/Domain/Repository/SearchRepositoryInterface.php` |
 | 10 | Environment Portability & Dynamic URLs | ⚪ not started | — |
-| 11 | Developer Experience & Diagnostics | 🟡 partial | `make:page` ✅ (Milestone 1), `make:block` 🟡 (Gemini, not reviewed), `audit:verify` 🟡 (Gemini, not reviewed), `DevToolbar.php` **not reviewed** |
+| 11 | Developer Experience & Diagnostics | 🟡 partial | `make:page` ✅ (Milestone 1), `make:block` 🟡 (Gemini, not reviewed), `audit:verify` 🟡 (Gemini, not reviewed), `DevToolbar.php` **not reviewed**, `wp:install` ✅ (reviewed, fixed — see below) |
 | 12 | Forbidden Practices | ✅ enforced | `DomainPurityTest.php` catches `WP_Post`/`WP_Query`/`wpdb`/`App\Infrastructure` deps from Domain/Application |
 
+**Live HTTP wiring landed, at the nginx level**: `public/front.php` is now
+the real entrypoint for every public request. `docker/nginx/default.conf`
+routes `/wp-admin/`, `/wp-login.php`, `/wp-cron.php`, `/xmlrpc.php`,
+`/wp-content/`, `/wp-includes/` to WordPress's own files unchanged;
+everything else goes straight to `front.php`, which never loads WordPress
+at all (no `wp-load.php`/`WP_Query`) and calls `WpPageRepository` →
+`GetPage`/`GetLatestPublishedPageId` → `BlockAstParser` →
+`PageController`/`BlockRenderer` directly. Verified end-to-end: warm
+requests hit `Cache: HIT (0 DB)`, `Queries: 0`, `TTFB: ~7ms` — the actual
+section 4 budget, not just the goal. `themes/sovereign/index.php` is only
+reachable through WordPress's own admin/theme-preview context now; the
+public-facing copy of the render logic that used to live there is gone.
+CSRF/CSP/SecureFileController still aren't wired into this request path yet.
+
 ## Reviewed-and-fixed in this pass (2026-10-12/13)
+
+- **Critical: `themes/sovereign/index.php`'s `?action=bootstrap_install`
+  had zero auth/CSRF/environment checks** and called
+  `wp_install(..., 'admin', 'admin@example.com', ..., 'admin')` --
+  anyone who requested it first, not the site owner, got a known
+  `admin`/`admin` account. Removed the HTTP trigger entirely; replaced
+  with CLI-only `bin/console wp:install` (`WpInstallCommand`), which also
+  generates a random admin password instead of a hardcoded one
+  (`SmartBootstrapper::provisionDatabase()` now takes real credentials).
+- `WpInstallCommand`/`SmartBootstrapper::detectEnvironment()` also had a
+  "fail open" bug: if the DB connectivity check itself failed (observed
+  once from a transient container-networking issue), the command treated
+  that the same as "not installed" and re-ran `wp_install()` against an
+  already-installed site, silently resetting its real admin account.
+  Fixed to abort instead of guessing when `dbConnected` is false.
+- The `app` container had no volume for WordPress's docroot at all, so
+  `wp:install` run from it wrote a fresh WP core download into an
+  isolated, throwaway filesystem location nothing else could see, while
+  still mutating the real shared database -- the two were silently out of
+  sync. Fixed by mounting the same `wp_data` volume into `app` too.
+- **`MerkleAuditLogger::log()`** had a real race condition: read-then-insert
+  with no lock meant two concurrent writers could fork the hash chain.
+  Fixed with a MySQL named lock (`GET_LOCK`/`RELEASE_LOCK`), skipped on
+  non-MySQL drivers (the existing test uses in-memory SQLite). Verified with
+  a real two-connection test proving the lock actually serializes access.
 
 - **`MerkleAuditLogger::log()`** had a real race condition: read-then-insert
   with no lock meant two concurrent writers could fork the hash chain.
@@ -53,13 +92,21 @@ Legend: ✅ built & verified · 🟡 built, not fully verified · ⚪ not starte
 
 ## Known gaps not yet addressed
 
-- Sections 4, 8, 9, the CSP bridge, `make:block`/`audit:verify`/`DevToolbar`
-  have not been read/reviewed yet — tests passing is not the same as
-  reviewed, especially for anything security- or correctness-sensitive.
-- No live HTTP entrypoint wires `PageController`/`SecureFileController`/
-  `CsrfController` into an actual request — `src/Presentation/Http` exists
-  but nothing routes real requests to it yet (`wp-admin` still serves the
-  default WordPress theme).
+- Sections 4 (beyond the cache wiring in `front.php`), 8, 9, the CSP
+  bridge, `make:block`/`audit:verify`/`DevToolbar` have not been read/
+  reviewed yet — tests passing is not the same as reviewed, especially
+  for anything security- or correctness-sensitive.
+- `public/front.php` is outside `phpstan.neon`/`psalm.xml`'s scanned
+  paths (same as `bin/console` always was) — reviewed by hand, not by
+  the automated gate.
+- The homepage fallback (`GetLatestPublishedPageId`) shows only the single
+  most recent published page/post in full, not a real paginated blog
+  index -- a deliberate simplification, not full `show_on_front=posts`
+  behaviour.
+- WordPress's own core auto-update isn't disabled
+  (`WP_AUTO_UPDATE_CORE`) -- since core is a `wp_data` volume we don't
+  otherwise manage via a tracked file, WP could silently replace its own
+  files outside of our `wp:install` flow.
 - `agents_md.md`'s cipher description ("XChaCha20-Poly1305 via
   `sodium_crypto_secretbox`") is internally inconsistent — `sodium_crypto_secretbox`
   is actually XSalsa20-Poly1305, a different (also secure) construction.

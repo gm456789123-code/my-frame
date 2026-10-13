@@ -6,3 +6,6 @@ composer.phar
 
 # WordPress runtime data mounted via docker-compose volumes, not part of the repo
 /wp-content/uploads/
+wp-config.php
+*.tar.gz
+*.tar

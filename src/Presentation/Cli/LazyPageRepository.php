@@ -42,6 +42,12 @@ final class LazyPageRepository implements PageRepositoryInterface
         return $this->inner()->softDelete($id, $deletedBy);
     }
 
+    #[Override]
+    public function findLatestPublishedId(): ?PostId
+    {
+        return $this->inner()->findLatestPublishedId();
+    }
+
     private function inner(): PageRepositoryInterface
     {
         return $this->inner ??= new WpPageRepository(WpdbConnection::get());

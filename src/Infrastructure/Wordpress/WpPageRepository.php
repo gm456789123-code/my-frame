@@ -76,6 +76,22 @@ final readonly class WpPageRepository implements PageRepositoryInterface
     }
 
     #[Override]
+    public function findLatestPublishedId(): ?PostId
+    {
+        $statement = $this->connection->query(
+            'SELECT ID FROM wp_posts
+             WHERE post_status = \'publish\' AND deleted_at IS NULL
+             ORDER BY post_date DESC
+             LIMIT 1',
+        );
+
+        /** @var array{ID: int}|false $row */
+        $row = $statement !== false ? $statement->fetch(PDO::FETCH_ASSOC) : false;
+
+        return $row !== false ? new PostId($row['ID']) : null;
+    }
+
+    #[Override]
     public function softDelete(PostId $id, PostId $deletedBy): bool
     {
         $statement = $this->connection->prepare(
