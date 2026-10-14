@@ -19,6 +19,7 @@ use App\Application\UseCase\Page\GetLatestPublishedPageId;
 use App\Application\UseCase\Page\GetPage;
 use App\Infrastructure\Cache\RedisTaggedCache;
 use App\Infrastructure\Env;
+use App\Infrastructure\Installer\SmartBootstrapper;
 use App\Infrastructure\Wordpress\Gutenberg\BlockAstParser;
 use App\Infrastructure\Wordpress\WpdbConnection;
 use App\Infrastructure\Wordpress\WpPageRepository;
@@ -26,17 +27,111 @@ use App\Presentation\Http\PageController;
 use App\Presentation\View\BlockRenderer;
 use Latte\Engine;
 
-$siteUrl = rtrim(Env::string('APP_URL', 'http://localhost:8080'), '/');
-$logoUrl = $siteUrl . '/wp-content/themes/sovereign/assets/logo.png';
+// Safe asset serving for logo/favicon so it never 404s on any host or domain
+if (isset($_GET['asset']) && $_GET['asset'] === 'logo.png') {
+    $candidates = [
+        $projectRoot . '/public/assets/logo.png',
+        $projectRoot . '/assets/logo.png',
+        $projectRoot . '/themes/sovereign/assets/logo.png',
+    ];
+    foreach ($candidates as $candidate) {
+        if (is_file($candidate)) {
+            header('Content-Type: image/png');
+            header('Cache-Control: public, max-age=86400');
+            readfile($candidate);
+            exit;
+        }
+    }
+}
+
+// Auto-detect current protocol and host
+$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$host = $_SERVER['HTTP_HOST'] ?? 'localhost:8080';
+$detectedSiteUrl = "{$scheme}://{$host}";
+$siteUrl = rtrim(Env::string('APP_URL', $detectedSiteUrl), '/');
+if (str_contains($siteUrl, 'localhost') && !str_contains($host, 'localhost')) {
+    $siteUrl = $detectedSiteUrl;
+}
+$logoUrl = '?asset=logo.png';
 
 $latte = new Engine();
 $latte->setTempDirectory(sys_get_temp_dir());
 
-// Everything that needs WordPress's schema (wp_posts etc.) is wrapped in
-// one try/catch: if it isn't installed yet, that's a missing-table
-// PDOException, not a special case we check for up front -- checking "is
-// WordPress installed" on every request would cost a DB query even on
-// warm/cached hits, defeating the whole point of this bypass.
+// -------------------------------------------------------------
+// Web Installer Action: 1-Click Bootstrap from Browser
+// -------------------------------------------------------------
+if (isset($_POST['action']) && $_POST['action'] === 'install') {
+    $logs = [];
+    $logger = function(string $msg) use (&$logs): void {
+        $logs[] = $msg;
+    };
+
+    try {
+        $pdo = null;
+        try {
+            $pdo = WpdbConnection::get();
+        } catch (Throwable) {
+            $pdo = null;
+        }
+
+        $bootstrapper = new SmartBootstrapper($pdo);
+        $env = $bootstrapper->detectEnvironment();
+        $targetDir = $env['targetDir'];
+
+        // 1. Download Core if needed
+        if (!$env['coreFilesExist']) {
+            $bootstrapper->downloadCore($targetDir, $logger);
+        }
+
+        // 2. Generate wp-config.php if needed
+        if (!$env['configExists']) {
+            $bootstrapper->generateWpConfig($targetDir, $logger);
+        }
+
+        // 3. Provision database tables
+        $adminUser = 'admin';
+        $adminPassword = $_POST['admin_password'] ?? 'Sovereign@' . date('Y');
+        if (!is_string($adminPassword) || trim($adminPassword) === '') {
+            $adminPassword = 'Sovereign@' . date('Y');
+        }
+        $adminEmail = 'admin@' . parse_url($siteUrl, PHP_URL_HOST);
+
+        $bootstrapper->provisionDatabase($targetDir, $logger, $adminUser, $adminPassword, $adminEmail);
+
+        // 4. Activate theme
+        $bootstrapper->activateSovereignTheme($logger);
+
+        // Render Install Success Page
+        header('Content-Type: text/html; charset=UTF-8');
+        echo $latte->renderToString($projectRoot . '/templates/starter.latte', [
+            'siteName' => 'Sovereign Engine',
+            'logoUrl' => $logoUrl,
+            'phpVersion' => PHP_VERSION,
+            'installSuccess' => true,
+            'adminUser' => $adminUser,
+            'adminPassword' => $adminPassword,
+            'adminUrl' => $siteUrl . '/wp-admin/',
+            'siteUrl' => $siteUrl,
+            'logs' => $logs,
+        ]);
+        exit;
+    } catch (Throwable $e) {
+        $logs[] = '[ERROR] ' . $e->getMessage();
+        header('Content-Type: text/html; charset=UTF-8');
+        echo $latte->renderToString($projectRoot . '/templates/starter.latte', [
+            'siteName' => 'Sovereign Engine',
+            'logoUrl' => $logoUrl,
+            'phpVersion' => PHP_VERSION,
+            'installError' => $e->getMessage(),
+            'logs' => $logs,
+        ]);
+        exit;
+    }
+}
+
+// -------------------------------------------------------------
+// Normal Public Request Pipeline
+// -------------------------------------------------------------
 try {
     $pdo = WpdbConnection::get();
     $repository = new WpPageRepository($pdo);
@@ -97,8 +192,7 @@ try {
     echo $response['body'];
 } catch (Throwable) {
     // WordPress isn't installed yet (wp_posts doesn't exist) or the
-    // database is unreachable -- either way, there's nothing to render
-    // except "go run the installer".
+    // database is unreachable -- render pre-install starter with 1-click install button.
     http_response_code(503);
     header('Content-Type: text/html; charset=UTF-8');
     echo $latte->renderToString($projectRoot . '/templates/starter.latte', [
