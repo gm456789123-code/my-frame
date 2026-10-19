@@ -70,5 +70,83 @@ add_action('init', function (): void {
     }
 }, 1);
 
+// Plugin Buffer: Warn admins when a known frontend-dependent plugin is active.
+// Sovereign Engine's public front controller (public/front.php) never boots
+// WordPress's hook/template system on the live site -- only wp-admin itself
+// still runs real WordPress -- so shortcodes, widgets, checkout flows, and
+// enqueued frontend scripts from these plugins will never appear to visitors,
+// even though they look fully installed and configured in wp-admin.
+add_action('admin_notices', function (): void {
+    if (!current_user_can('activate_plugins')) {
+        return;
+    }
 
+    $activePlugins = (array) get_option('active_plugins', []);
+    if (is_multisite()) {
+        $activePlugins = array_merge(
+            $activePlugins,
+            array_keys((array) get_site_option('active_sitewide_plugins', [])),
+        );
+    }
+
+    $frontendDependent = [
+        'woocommerce/woocommerce.php' => 'WooCommerce',
+        'contact-form-7/wp-contact-form-7.php' => 'Contact Form 7',
+        'wpforms-lite/wpforms.php' => 'WPForms',
+        'wpforms/wpforms.php' => 'WPForms',
+        'elementor/elementor.php' => 'Elementor',
+        'elementor-pro/elementor-pro.php' => 'Elementor Pro',
+        'jetpack/jetpack.php' => 'Jetpack',
+        'bbpress/bbpress.php' => 'bbPress',
+        'buddypress/bp-loader.php' => 'BuddyPress',
+        'mailchimp-for-wp/mailchimp-for-wp.php' => 'MC4WP: Mailchimp for WordPress',
+    ];
+
+    $found = [];
+    foreach ($frontendDependent as $basename => $label) {
+        if (in_array($basename, $activePlugins, true)) {
+            $found[] = $label;
+        }
+    }
+
+    if ($found !== []) {
+        printf(
+            '<div class="notice notice-warning"><p><strong>Sovereign Engine:</strong> %s %s not supported '
+            . 'on the public site. This engine renders public pages through its own front controller and never '
+            . 'runs WordPress\'s plugin hook/template system there, so this plugin\'s frontend features '
+            . '(shortcodes, widgets, forms, checkout, scripts) will not appear to visitors -- it will only work '
+            . 'inside wp-admin itself.</p></div>',
+            esc_html(implode(', ', $found)),
+            count($found) === 1 ? 'is active but is' : 'are active but are',
+        );
+    }
+
+    // Separate warning: caching plugins don't just "not render" -- they
+    // actively fight Sovereign Engine's own Redis-backed cache layer, since
+    // both try to own the same response.
+    $cachingPlugins = [
+        'wp-super-cache/wp-cache.php' => 'WP Super Cache',
+        'w3-total-cache/w3-total-cache.php' => 'W3 Total Cache',
+        'litespeed-cache/litespeed-cache.php' => 'LiteSpeed Cache',
+        'wp-fastest-cache/wpFastestCache.php' => 'WP Fastest Cache',
+        'wp-rocket/wp-rocket.php' => 'WP Rocket',
+    ];
+
+    $foundCaching = [];
+    foreach ($cachingPlugins as $basename => $label) {
+        if (in_array($basename, $activePlugins, true)) {
+            $foundCaching[] = $label;
+        }
+    }
+
+    if ($foundCaching !== []) {
+        printf(
+            '<div class="notice notice-warning"><p><strong>Sovereign Engine:</strong> %s %s active, but public '
+            . 'pages are already served by this engine\'s own Redis cache layer and never reach WordPress at all. '
+            . 'This plugin has no effect on the live site and should be deactivated to avoid confusion.</p></div>',
+            esc_html(implode(', ', $foundCaching)),
+            count($foundCaching) === 1 ? 'is' : 'are',
+        );
+    }
+});
 
