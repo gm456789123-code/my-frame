@@ -58,8 +58,8 @@ afterEach(function (): void {
     }
 });
 
-it('creates a page and retrieves it back', function (): void {
-    $id = $this->repository->create('Hello', '<p>World</p>', PageStatus::Draft, Locale::Thai);
+it('creates a published page and retrieves it back', function (): void {
+    $id = $this->repository->create('Hello', '<p>World</p>', PageStatus::Published, Locale::Thai);
     $this->createdIds = [$id->value];
 
     $page = $this->repository->find($id);
@@ -67,8 +67,15 @@ it('creates a page and retrieves it back', function (): void {
     expect($page)->not->toBeNull()
         ->and($page->title)->toBe('Hello')
         ->and($page->content)->toBe('<p>World</p>')
-        ->and($page->status)->toBe(PageStatus::Draft)
+        ->and($page->status)->toBe(PageStatus::Published)
         ->and($page->locale)->toBe(Locale::Thai);
+});
+
+it('does not return draft pages from find()', function (): void {
+    $id = $this->repository->create('Secret Draft', '<p>not public</p>', PageStatus::Draft, Locale::English);
+    $this->createdIds = [$id->value];
+
+    expect($this->repository->find($id))->toBeNull();
 });
 
 it('soft-deletes a page instead of removing the row', function (): void {
@@ -115,4 +122,58 @@ it('finds the most recently published page for the homepage fallback', function 
 
     expect($latest)->not->toBeNull()
         ->and($latest->equals($published))->toBeTrue();
+});
+
+it('prefers Yoast SEO postmeta over the auto-generated title/description/image', function (): void {
+    $hasPostmetaTable = $this->pdo->query("SHOW TABLES LIKE 'wp_postmeta'")->fetch() !== false;
+    if (!$hasPostmetaTable) {
+        $this->markTestSkipped('wp_postmeta does not exist (run a full WordPress core install first).');
+    }
+
+    $id = $this->repository->create(
+        'Auto Title',
+        '<p>Auto-generated description text that would otherwise be used.</p>',
+        PageStatus::Published,
+        Locale::English,
+    );
+    $this->createdIds = [$id->value];
+
+    $insertMeta = $this->pdo->prepare(
+        'INSERT INTO wp_postmeta (post_id, meta_key, meta_value) VALUES (:post_id, :meta_key, :meta_value)'
+    );
+    $insertMeta->execute(['post_id' => $id->value, 'meta_key' => '_yoast_wpseo_title', 'meta_value' => 'Yoast Title']);
+    $insertMeta->execute(['post_id' => $id->value, 'meta_key' => '_yoast_wpseo_metadesc', 'meta_value' => 'Yoast description.']);
+    $insertMeta->execute(['post_id' => $id->value, 'meta_key' => '_yoast_wpseo_opengraph-image', 'meta_value' => 'https://example.com/og.jpg']);
+
+    $page = $this->repository->find($id);
+    expect($page)->not->toBeNull();
+
+    $seo = $page->buildSeoData('https://example.com');
+
+    expect($seo->title)->toBe('Yoast Title')
+        ->and($seo->description)->toBe('Yoast description.')
+        ->and($seo->ogImage)->toBe('https://example.com/og.jpg')
+        // canonical still comes from this app's own routing, not Yoast.
+        ->and($seo->canonicalUrl)->toContain('https://example.com/');
+
+    $this->pdo->prepare('DELETE FROM wp_postmeta WHERE post_id = :post_id')->execute(['post_id' => $id->value]);
+});
+
+it('falls back to auto-generated SEO data when no SEO plugin meta exists', function (): void {
+    $id = $this->repository->create(
+        'Plain Page',
+        '<p>No SEO plugin installed, so this content becomes the description.</p>',
+        PageStatus::Published,
+        Locale::English,
+    );
+    $this->createdIds = [$id->value];
+
+    $page = $this->repository->find($id);
+    expect($page)->not->toBeNull();
+
+    $seo = $page->buildSeoData('https://example.com');
+
+    expect($seo->title)->toBe('Plain Page')
+        ->and($seo->description)->toContain('No SEO plugin installed')
+        ->and($seo->ogImage)->toBeNull();
 });

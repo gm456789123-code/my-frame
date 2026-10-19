@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{$siteName} — Sovereign Framework</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="{!empty($cssUrl) ? $cssUrl : '?asset=sovereign.css'}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -97,7 +97,50 @@
         {else}
             <!-- 1-CLICK INSTALL BUTTON & ACTION -->
             <div class="w-full max-w-md space-y-5">
-                <form method="POST" action="?action=install" id="installForm" onsubmit="handleInstall(event)">
+                <form method="POST" id="installForm" onsubmit="handleInstall(event)">
+                    <input type="hidden" name="action" value="install">
+                    <input type="hidden" name="install_csrf" value="{$installCsrfToken ?? ''}">
+
+                    {if !empty($needsDbCredentials)}
+                    <!-- Standard WordPress-style DB setup: same fields as
+                         wp-admin/setup-config.php, filled in directly in the
+                         browser -- no file to create or edit by hand. -->
+                    <div class="mb-4 space-y-3 text-left">
+                        <div>
+                            <label for="db_name" class="block text-xs text-zinc-400 mb-1.5 font-mono">Database Name</label>
+                            <input type="text" name="db_name" id="db_name" required value="{$dbName ?? ''}"
+                                   placeholder="wordpress"
+                                   class="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-sm text-white placeholder-zinc-600 focus:border-zinc-600 focus:outline-none font-mono">
+                        </div>
+                        <div>
+                            <label for="db_user" class="block text-xs text-zinc-400 mb-1.5 font-mono">Database Username</label>
+                            <input type="text" name="db_user" id="db_user" required value="{$dbUser ?? ''}"
+                                   placeholder="root"
+                                   class="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-sm text-white placeholder-zinc-600 focus:border-zinc-600 focus:outline-none font-mono">
+                        </div>
+                        <div>
+                            <label for="db_password" class="block text-xs text-zinc-400 mb-1.5 font-mono">Database Password</label>
+                            <input type="password" name="db_password" id="db_password"
+                                   placeholder="(leave blank if none)"
+                                   class="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-sm text-white placeholder-zinc-600 focus:border-zinc-600 focus:outline-none font-mono">
+                        </div>
+                        <div>
+                            <label for="db_host" class="block text-xs text-zinc-400 mb-1.5 font-mono">Database Host</label>
+                            <input type="text" name="db_host" id="db_host" value="{$dbHost ?? 'localhost'}"
+                                   placeholder="localhost"
+                                   class="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-sm text-white placeholder-zinc-600 focus:border-zinc-600 focus:outline-none font-mono">
+                            <p class="mt-1 text-[11px] text-zinc-500">Ask your hosting provider if you're not sure -- "localhost" works for most shared hosting.</p>
+                        </div>
+                    </div>
+                    {/if}
+
+                    <div class="mb-4 text-left">
+                        <label for="admin_password" class="block text-xs text-zinc-400 mb-1.5 font-mono">Admin Password</label>
+                        <input type="password" name="admin_password" id="admin_password"
+                               placeholder="Leave blank to auto-generate"
+                               class="w-full px-3 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-sm text-white placeholder-zinc-600 focus:border-zinc-600 focus:outline-none font-mono">
+                    </div>
+
                     <button type="submit" id="installBtn" class="w-full py-3 px-6 rounded-xl bg-white hover:bg-zinc-200 text-zinc-950 font-semibold text-sm transition shadow-xl shadow-white/10 flex items-center justify-center space-x-2 group">
                         <svg class="w-4 h-4 text-zinc-900 transition-transform group-hover:scale-110" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -129,7 +172,7 @@
 
     <footer class="max-w-4xl w-full mx-auto flex flex-col sm:flex-row items-center justify-between text-xs text-zinc-500 font-mono gap-2 pt-6 border-t border-zinc-900 relative z-10">
         <div>
-            <span>PHP {$phpVersion}</span>
+            {if !empty($isLocal)}<span>PHP {=PHP_VERSION}</span>{else}<span>Sovereign Engine</span>{/if}
         </div>
         <div>
             <span>Hexagonal DDD Engine</span>

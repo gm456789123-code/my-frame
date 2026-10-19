@@ -32,3 +32,24 @@ it('returns null for a page that does not exist', function (): void {
 
     expect($output->page)->toBeNull();
 });
+
+it('retrieves a page by its slug including Thai Unicode characters', function (): void {
+    $repository = new InMemoryPageRepository();
+    $repository->create('About Us', '<p>English info</p>', \App\Domain\ValueObject\PageStatus::Published, Locale::English);
+    $repository->create('เกี่ยวกับเรา', '<p>ข้อมูลภาษาไทย</p>', \App\Domain\ValueObject\PageStatus::Published, Locale::Thai);
+    $repository->create('Secret Draft', '<p>Draft</p>', \App\Domain\ValueObject\PageStatus::Draft, Locale::English);
+
+    // English slug
+    $pageEn = $repository->findBySlug('about-us');
+    expect($pageEn)->not->toBeNull()
+        ->and($pageEn->title)->toBe('About Us');
+
+    // Thai slug
+    $pageTh = $repository->findBySlug('เกี่ยวกับเรา');
+    expect($pageTh)->not->toBeNull()
+        ->and($pageTh->title)->toBe('เกี่ยวกับเรา');
+
+    // Draft page must return null
+    expect($repository->findBySlug('secret-draft'))->toBeNull()
+        ->and($repository->findBySlug('non-existent'))->toBeNull();
+});
